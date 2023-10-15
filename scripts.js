@@ -1,76 +1,80 @@
-// classe para somular o servidor
-class Servidor {
-
-};
-
-var Server = new Servidor();
-let email;
-let credential;
-let ramdom = "12345";
-
-async function register() {
-    debugger;
-    email = document.getElementById('email').value;
-
-    // Create options for the new credential
-    let options = {
-        challenge: new Uint8Array([ramdom]),
-        rp: {
-            name: "Example RP"
-        },
-        user: {
-            id: new Uint8Array([ramdom]),
-            name: email,
-            displayName: email
-        },
-        pubKeyCredParams: [
-            {
-                type: "public-key",
-                alg: -7  // "ES256" IANA COSE Algorithm identifier
-            },
-            {
-                type: "public-key",
-                alg: -257 // "RS256" IANA COSE Algorithm identifier
-            }
-        ]
-    };
-
-    // Create a new credential
-    credential = await navigator.credentials.create({ publicKey: options });
-
-    // Store the credential in server
-    Server.credential = credential;
+// Verifique se o navegador suporta WebAuthn
+if (!window.PublicKeyCredential) {
+    console.error("Seu navegador não suporta WebAuthn.");
+} else {
+    console.log("WebAuthn é suportado!");
 }
 
-async function login() {
-    debugger;
-    let email = document.getElementById('email').value;
+// Simule um servidor que armazena informações de registro de usuário
+const fakeServer = {
+    users: {},
+};
 
-    // Get the stored credential from server
-    let storedCredential = Server.credential;
+// Função para registrar um usuário
+async function registerUser() {
+    try {
+        const publicKey = await navigator.credentials.create({
+            publicKey: {
+                challenge: new Uint8Array([1, 2, 3, 4, 5]), // Desafio gerado pelo servidor
+                rp: { id: "sistemalogin.test", name: "Exemplo Corp" },
+                user: {
+                    id: new Uint8Array([1, 2, 3, 4, 5]), // Identificador exclusivo do usuário
+                    name: "usuario@exemplo.com",
+                    displayName: "Usuário de Exemplo",
+                },
+                pubKeyCredParams: [
+                    { type: "public-key", alg: -7 }, // ECDSA com P-256
+                    { type: "public-key", alg: -35 }, // ECDSA com P-384
+                    { type: "public-key", alg: -36 }, // ECDSA com P-521
+                    { type: "public-key", alg: -257 },
+                ],
+                authenticatorSelection: {
+                    authenticatorAttachment: "cross-platform", // Prefer autenticadores integrados à plataforma
+                    requireResidentKey: true, // Exige autenticadores com chaves residentes
+                    userVerification: "preferred", // Exige verificação do usuário durante a autenticação
+                },
+            },
+        });
 
-    // Create options for the assertion
-    let options = {
-        challenge: new Uint8Array([ramdom]),
-        allowCredentials: [
-            {
-                id: storedCredential.rawId,
-                type: "public-key",
-                transports: ['usb', 'ble', 'nfc', 'internal'],
-            }
-        ]
-    };
+        const base64RawId = btoa(String.fromCharCode.apply(null, new Uint8Array(publicKey.rawId)));
+        const base64AttestationObject = btoa(String.fromCharCode.apply(null, new Uint8Array(publicKey.response.attestationObject)));
+        const base64ClientDataJSON = btoa(String.fromCharCode.apply(null, new Uint8Array(publicKey.response.clientDataJSON)));
 
-    // Get an assertion from the authenticator
-    let assertion = await navigator.credentials.get({ publicKey: options });
+        const registrationData = {
+            id: "usuario@exemplo.com",
+            displayName: "Usuário de Exemplo",
+            rawId: base64RawId,
+            type: publicKey.type,
+            attestationObject: base64AttestationObject,
+            clientDataJSON: base64ClientDataJSON,
+        };
 
-    // In a real-world scenario, you would send the assertion response to your server
-    // and verify it against the original credential data there.
+        fakeServer.users[publicKey.id] = registrationData;
 
-    // Since this is a client-side only proof of concept, we'll compare the credential ID instead.
-    if (assertion.id === storedCredential.id) {
-        alert("Login successful");
-    } else {
-        alert("Login failed");
+        console.log("Usuário registrado com sucesso!");
+    } catch (error) {
+        console.error("Erro ao registrar usuário:", error);
+    }
+}
+
+// Função para autenticar um usuário
+async function authenticateUser() {
+    try {
+        const allowCredentials = Object.values(fakeServer.users).map((user) => ({
+            id: user.rawId,
+            type: user.type,
+        }));
+
+        const publicKey = await navigator.credentials.get({
+            publicKey: {
+                challenge: new Uint8Array([1, 2, 3, 4, 5]), // Desafio gerado pelo servidor
+                allowCredentials,
+                userVerification: "preferred", // Pode ser "preferred" se você não quiser exigir verificação do usuário
+            },
+        });
+
+        console.log("Usuário autenticado com sucesso!");
+    } catch (error) {
+        console.error("Erro na autenticação do usuário:", error);
     }
 }
